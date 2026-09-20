@@ -1,24 +1,19 @@
 import os
 import tempfile
+from deep_translator import GoogleTranslator
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from googletrans import Translator
 from groq import Groq
 from gtts import gTTS
 
 app = FastAPI()
 
-# Groq クライアントの初期化（環境変数 GROQ_API_KEY を使用）
+# Groq クライアントの初期化
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
-# 翻訳エンジンの初期化
-translator = Translator()
 
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index():
-    """index.html を返すルート"""
     if os.path.exists("index.html"):
         with open("index.html", "r", encoding="utf-8") as f:
             return f.read()
@@ -27,15 +22,13 @@ async def read_index():
 
 @app.post("/translate-audio")
 async def translate_audio(file: UploadFile = File(...)):
-    """録音データを受け取り、STT -> 翻訳 -> TTS を行って音声ファイルを返す"""
-    # 1. 送信された音声データを一時ファイルに保存
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_input:
         content = await file.read()
         temp_input.write(content)
         temp_input_path = temp_input.name
 
     try:
-        # 2. Groq Whisper API で文字起こし (STT)
+        # 1. Groq Whisper API で文字起こし
         with open(temp_input_path, "rb") as audio_file:
             transcription = client.audio.transcriptions.create(
                 file=(temp_input_path, audio_file.read()),
@@ -48,19 +41,19 @@ async def translate_audio(file: UploadFile = File(...)):
         if not recognized_text.strip():
             recognized_text = "音声が聞き取れませんでした。"
 
-        # 3. Google翻訳で日本語から英語へ翻訳
-        translated = translator.translate(recognized_text, src="ja", dest="en")
-        translated_text = translated.text
+        # 2. deep-translator で日本語から英語へ翻訳
+        translated_text = GoogleTranslator(
+            source="ja", target="en"
+        ).translate(recognized_text)
         print(f"翻訳テキスト: {translated_text}")
 
-        # 4. gTTS で英語音声を生成 (TTS)
+        # 3. gTTS で英語音声を生成
         tts = gTTS(text=translated_text, lang="en")
         temp_output_path = tempfile.NamedTemporaryFile(
             delete=False, suffix=".mp3"
         ).name
         tts.save(temp_output_path)
 
-        # 5. 生成した音声ファイルをレスポンスとして返す
         return FileResponse(
             temp_output_path,
             media_type="audio/mpeg",
@@ -71,7 +64,6 @@ async def translate_audio(file: UploadFile = File(...)):
         )
 
     finally:
-        # 一時ファイルの削除
         if os.path.exists(temp_input_path):
             os.remove(temp_input_path)
 
