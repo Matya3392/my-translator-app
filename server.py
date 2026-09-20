@@ -1,6 +1,5 @@
 import os
 import tempfile
-from deep_translator import MyMemoryTranslator
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from groq import Groq
@@ -28,7 +27,7 @@ async def translate_audio(file: UploadFile = File(...)):
         temp_input_path = temp_input.name
 
     try:
-        # 1. Groq Whisper API で文字起こし
+        # 1. Groq Whisper API で文字起こし (STT)
         with open(temp_input_path, "rb") as audio_file:
             transcription = client.audio.transcriptions.create(
                 file=(temp_input_path, audio_file.read()),
@@ -40,14 +39,25 @@ async def translate_audio(file: UploadFile = File(...)):
 
         if not recognized_text.strip():
             recognized_text = "音声が聞き取れませんでした。"
+            translated_text = "Could not hear any audio."
+        else:
+            # 2. Groq LLM (llama-3.3-70b-versatile) で高速・高精度な日本語->英語翻訳
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional translator. Translate the following Japanese text into natural English. Respond ONLY with the translation, no extra text.",
+                    },
+                    {"role": "user", "content": recognized_text},
+                ],
+                temperature=0.3,
+            )
+            translated_text = response.choices[0].message.content.strip()
 
-        # 2. MyMemoryTranslator で日本語から英語へ翻訳（Googleの制限回避）
-        translated_text = MyMemoryTranslator(
-            source="ja-JP", target="en-GB"
-        ).translate(recognized_text)
         print(f"翻訳テキスト: {translated_text}")
 
-        # 3. gTTS で英語音声を生成
+        # 3. gTTS で英語音声を生成 (TTS)
         tts = gTTS(text=translated_text, lang="en")
         temp_output_path = tempfile.NamedTemporaryFile(
             delete=False, suffix=".mp3"
