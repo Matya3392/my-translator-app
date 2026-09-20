@@ -1,5 +1,6 @@
 import os
 import tempfile
+from deep_translator import GoogleTranslator
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from groq import Groq
@@ -7,7 +8,7 @@ from gtts import gTTS
 
 app = FastAPI()
 
-# Groq クライアントの初期化
+# Groq クライアントの初期化（音声認識のみ使用）
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 
@@ -27,7 +28,7 @@ async def translate_audio(file: UploadFile = File(...)):
         temp_input_path = temp_input.name
 
     try:
-        # 1. Groq Whisper API で日本語音声を文字起こし (STT)
+        # 1. Groq Whisper API で文字起こし (STT)
         with open(temp_input_path, "rb") as audio_file:
             transcription = client.audio.transcriptions.create(
                 file=(temp_input_path, audio_file.read()),
@@ -41,19 +42,10 @@ async def translate_audio(file: UploadFile = File(...)):
             recognized_text = "音声が聞き取れませんでした。"
             translated_text = "Could not hear any audio."
         else:
-            # 2. Groq LLM (llama-3.3-70b-versatile) で日本語 -> 英語翻訳
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional translator. Translate the given Japanese text into natural English. Respond ONLY with the translated English text.",
-                    },
-                    {"role": "user", "content": recognized_text},
-                ],
-                temperature=0.3,
-            )
-            translated_text = response.choices[0].message.content.strip()
+            # 2. deep-translator で日本語 -> 英語翻訳
+            translated_text = GoogleTranslator(
+                source="auto", target="en"
+            ).translate(recognized_text)
 
         print(f"翻訳テキスト: {translated_text}")
 

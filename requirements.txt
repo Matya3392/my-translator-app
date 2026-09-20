@@ -2,4 +2,5 @@ fastapi
 uvicorn
 groq
 gtts
+deep-translator
 python-multipart
