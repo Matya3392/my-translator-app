@@ -1,104 +1,82 @@
 import os
-import shutil
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+import tempfile
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from googletrans import Translator
-from gtts import gTTS
 from groq import Groq
+from gtts import gTTS
 
 app = FastAPI()
 
-# CORS（すべての通信を許可）
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Groq クライアントの初期化（環境変数 GROQ_API_KEY を使用）
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# 静的ファイル配信（www フォルダ）
-OS_DIR = "www"
-os.makedirs(OS_DIR, exist_ok=True)
-app.mount("/static", StaticFiles(directory="www"), name="static")
-
-INPUT_SPEECH_WAV = "input_speech.wav"
+# 翻訳エンジンの初期化
 translator = Translator()
 
-# Groq APIクライアントの初期化（環境変数 GROQ_API_KEY から取得）
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-@app.get("/")
-def read_root():
-    if os.path.exists("www/index.html"):
-        return FileResponse("www/index.html")
-    elif os.path.exists("index.html"):
-        return FileResponse("index.html")
-    return {"status": "ok"}
+@app.get("/", response_class=HTMLResponse)
+async def read_index():
+    """index.html を返すルート"""
+    if os.path.exists("index.html"):
+        with open("index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>index.html が見つかりません</h1>"
 
-@app.post("/translate")
-async def process_audio(
-    file: UploadFile = File(...),
-    target_lang: str = Form("ja")
-):
+
+@app.post("/translate-audio")
+async def translate_audio(file: UploadFile = File(...)):
+    """録音データを受け取り、STT -> 翻訳 -> TTS を行って音声ファイルを返す"""
+    # 1. 送信された音声データを一時ファイルに保存
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_input:
+        content = await file.read()
+        temp_input.write(content)
+        temp_input_path = temp_input.name
+
     try:
-        # 1. アップロードされた音声を保存
-        with open(INPUT_SPEECH_WAV, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # 2. Groq Whisper API で文字起こし (STT)
+        with open(temp_input_path, "rb") as audio_file:
+            transcription = client.audio.transcriptions.create(
+                file=(temp_input_path, audio_file.read()),
+                model="whisper-large-v3-turbo",
+                response_format="json",
+            )
+        recognized_text = transcription.text
+        print(f"認識テキスト: {recognized_text}")
 
-        # 2. 音声認識 (Groq経由Whisper または フォールバック)
-        recognized_text = ""
-        if groq_client:
-            with open(INPUT_SPEECH_WAV, "rb") as audio_file:
-                transcription = groq_client.audio.transcriptions.create(
-                    file=(INPUT_SPEECH_WAV, audio_file.read()),
-                    model="whisper-large-v3-turbo",
-                    response_format="json",
-                    language="ja"
-                )
-                recognized_text = transcription.text.strip()
-        else:
-            return {
-                "status": "error",
-                "message": "Groq APIキーが設定されていません。環境変数GROQ_API_KEYを設定してください。"
-            }
+        if not recognized_text.strip():
+            recognized_text = "音声が聞き取れませんでした。"
 
-        if not recognized_text:
-            return {"status": "error", "message": "音声が認識できませんでした"}
+        # 3. Google翻訳で日本語から英語へ翻訳
+        translated = translator.translate(recognized_text, src="ja", dest="en")
+        translated_text = translated.text
+        print(f"翻訳テキスト: {translated_text}")
 
-        # 3. Google Translateで翻訳
-        translated_res = translator.translate(recognized_text, dest=target_lang)
-        translated_text = translated_res.text
+        # 4. gTTS で英語音声を生成 (TTS)
+        tts = gTTS(text=translated_text, lang="en")
+        temp_output_path = tempfile.NamedTemporaryFile(
+            delete=False, suffix=".mp3"
+        ).name
+        tts.save(temp_output_path)
 
-        # 4. gTTSで音声合成
-        audio_url = None
-        try:
-            tts_filename = "output_tts.mp3"
-            tts_path = os.path.join("www", tts_filename)
-            
-            tts_lang = target_lang
-            if tts_lang == "zh-cn":
-                tts_lang = "zh-CN"
-            elif tts_lang == "zh-tw":
-                tts_lang = "zh-TW"
+        # 5. 生成した音声ファイルをレスポンスとして返す
+        return FileResponse(
+            temp_output_path,
+            media_type="audio/mpeg",
+            headers={
+                "X-Recognized-Text": recognized_text,
+                "X-Translated-Text": translated_text,
+            },
+        )
 
-            tts = gTTS(text=translated_text, lang=tts_lang)
-            tts.save(tts_path)
-            audio_url = f"/static/{tts_filename}"
-        except Exception as tts_err:
-            print(f"TTS生成エラー: {tts_err}")
+    finally:
+        # 一時ファイルの削除
+        if os.path.exists(temp_input_path):
+            os.remove(temp_input_path)
 
-        # 5. 結果返却
-        return {
-            "status": "success",
-            "recognized_text": recognized_text,
-            "translated_text": translated_text,
-            "audio_url": audio_url
-        }
 
-    except Exception as e:
-        print(f"Error: {e}")
-        return {"status": "error", "message": str(e)}
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
