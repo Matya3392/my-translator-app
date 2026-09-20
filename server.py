@@ -27,7 +27,7 @@ async def translate_audio(file: UploadFile = File(...)):
         temp_input_path = temp_input.name
 
     try:
-        # 1. Groq Whisper の Direct Translation 機能を使用 (モデル名で迷わない)
+        # 1. Groq Whisper の Direct Translation 機能を使用
         with open(temp_input_path, "rb") as audio_file:
             translation = client.audio.translations.create(
                 file=(temp_input_path, audio_file.read()),
@@ -36,8 +36,6 @@ async def translate_audio(file: UploadFile = File(...)):
             )
 
         translated_text = translation.text
-        recognized_text = "日本語音声から英語へ直接翻訳"
-
         print(f"翻訳テキスト: {translated_text}")
 
         if not translated_text.strip():
@@ -50,11 +48,12 @@ async def translate_audio(file: UploadFile = File(...)):
         ).name
         tts.save(temp_output_path)
 
+        # ヘッダーには日本語を入れず、安全な英語文字列を指定
         return FileResponse(
             temp_output_path,
             media_type="audio/mpeg",
             headers={
-                "X-Recognized-Text": recognized_text,
+                "X-Recognized-Text": "Audio translated successfully",
                 "X-Translated-Text": translated_text,
             },
         )
