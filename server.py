@@ -27,23 +27,37 @@ async def translate_audio(file: UploadFile = File(...)):
         temp_input_path = temp_input.name
 
     try:
-        # 1. Groq Whisper (whisper-large-v3) で直接「日本語音声 -> 英語テキスト」に翻訳
+        # 1. Groq Whisper で日本語音声の文字起こし
         with open(temp_input_path, "rb") as audio_file:
-            translation = client.audio.translations.create(
+            transcription = client.audio.transcriptions.create(
                 file=(temp_input_path, audio_file.read()),
                 model="whisper-large-v3",
                 response_format="json",
             )
+        recognized_text = transcription.text
+        print(f"認識テキスト: {recognized_text}")
 
-        translated_text = translation.text
-        recognized_text = "日本語音声から直接英語に翻訳しました"
+        if not recognized_text.strip():
+            recognized_text = "音声が聞き取れませんでした。"
+            translated_text = "Could not hear any audio."
+        else:
+            # 2. Groq LLM (gemma2-9b-it) で日本語 -> 英語翻訳
+            response = client.chat.completions.create(
+                model="gemma2-9b-it",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional translator. Translate the given Japanese text into natural English. Respond ONLY with the translated English text.",
+                    },
+                    {"role": "user", "content": recognized_text},
+                ],
+                temperature=0.3,
+            )
+            translated_text = response.choices[0].message.content.strip()
 
         print(f"翻訳テキスト: {translated_text}")
 
-        if not translated_text.strip():
-            translated_text = "Could not hear any audio."
-
-        # 2. gTTS で英語音声を生成 (TTS)
+        # 3. gTTS で英語音声を生成
         tts = gTTS(text=translated_text, lang="en")
         temp_output_path = tempfile.NamedTemporaryFile(
             delete=False, suffix=".mp3"
