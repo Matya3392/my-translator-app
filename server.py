@@ -41,9 +41,9 @@ async def translate_audio(file: UploadFile = File(...)):
             recognized_text = "音声が聞き取れませんでした。"
             translated_text = "Could not hear any audio."
         else:
-            # 2. Groq LLM (llama-3.1-8b-instant) で日本語->英語翻訳
+            # 2. Groq LLM で日本語->英語翻訳
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama-3.1-70b-versatile",
                 messages=[
                     {
                         "role": "system",
