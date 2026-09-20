@@ -35,10 +35,10 @@ async def translate_audio(file: UploadFile = File(...)):
                 response_format="json",
             )
 
-        translated_text = translation.text
+        translated_text = translation.text.strip()
         print(f"翻訳テキスト: {translated_text}")
 
-        if not translated_text.strip():
+        if not translated_text:
             translated_text = "Could not hear any audio."
 
         # 2. gTTS で英語音声を生成 (TTS)
@@ -48,13 +48,13 @@ async def translate_audio(file: UploadFile = File(...)):
         ).name
         tts.save(temp_output_path)
 
-        # ヘッダーには日本語を入れず、安全な英語文字列を指定
+        # ヘッダーの値を余計なスペースや記号を含まないシンプルな英数字・ASCIIのみにする
         return FileResponse(
             temp_output_path,
             media_type="audio/mpeg",
             headers={
-                "X-Recognized-Text": "Audio translated successfully",
-                "X-Translated-Text": translated_text,
+                "X-Recognized-Text": "Translated",
+                "X-Translated-Text": translated_text.encode("ascii", "ignore").decode("ascii"),
             },
         )
 
