@@ -1,6 +1,5 @@
 import os
 import tempfile
-from deep_translator import GoogleTranslator
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from groq import Groq
@@ -8,7 +7,7 @@ from gtts import gTTS
 
 app = FastAPI()
 
-# Groq クライアントの初期化（音声認識のみ使用）
+# Groq クライアントの初期化
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 
@@ -42,10 +41,19 @@ async def translate_audio(file: UploadFile = File(...)):
             recognized_text = "音声が聞き取れませんでした。"
             translated_text = "Could not hear any audio."
         else:
-            # 2. deep-translator で日本語 -> 英語翻訳
-            translated_text = GoogleTranslator(
-                source="auto", target="en"
-            ).translate(recognized_text)
+            # 2. Groq LLM (llama3-70b-8192) で日本語 -> 英語翻訳
+            response = client.chat.completions.create(
+                model="llama3-70b-8192",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional translator. Translate the given Japanese text into natural English. Respond ONLY with the translated English text.",
+                    },
+                    {"role": "user", "content": recognized_text},
+                ],
+                temperature=0.3,
+            )
+            translated_text = response.choices[0].message.content.strip()
 
         print(f"翻訳テキスト: {translated_text}")
 
