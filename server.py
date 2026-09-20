@@ -27,18 +27,16 @@ async def translate_audio(file: UploadFile = File(...)):
         temp_input_path = temp_input.name
 
     try:
-        # 1. Groq Whisper の translations API で直接「日本語音声 -> 英語テキスト」に変換
+        # 1. Groq Whisper (whisper-large-v3) で直接「日本語音声 -> 英語テキスト」に翻訳
         with open(temp_input_path, "rb") as audio_file:
             translation = client.audio.translations.create(
                 file=(temp_input_path, audio_file.read()),
-                model="whisper-large-v3-turbo",
+                model="whisper-large-v3",
                 response_format="json",
             )
 
         translated_text = translation.text
-        recognized_text = (
-            "日本語音声から直接英語に翻訳しました"  # 日本語ログ用
-        )
+        recognized_text = "日本語音声から直接英語に翻訳しました"
 
         print(f"翻訳テキスト: {translated_text}")
 
