@@ -20,7 +20,7 @@ async def read_index():
     return "<h1>index.html が見つかりません</h1>"
 
 
-@app.post("/translate-audio")
+@app.post("/translate")
 async def translate_audio(file: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_input:
         content = await file.read()
