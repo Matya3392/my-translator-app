@@ -1,0 +1,6 @@
+{
+  "appId": "com.example.voicetranslator",
+  "appName": "VoiceTranslator",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
