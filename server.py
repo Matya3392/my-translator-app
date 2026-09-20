@@ -1,6 +1,6 @@
 import os
 import tempfile
-from deep_translator import GoogleTranslator
+from deep_translator import MyMemoryTranslator
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from groq import Groq
@@ -41,9 +41,9 @@ async def translate_audio(file: UploadFile = File(...)):
         if not recognized_text.strip():
             recognized_text = "音声が聞き取れませんでした。"
 
-        # 2. deep-translator で日本語から英語へ翻訳
-        translated_text = GoogleTranslator(
-            source="ja", target="en"
+        # 2. MyMemoryTranslator で日本語から英語へ翻訳（Googleの制限回避）
+        translated_text = MyMemoryTranslator(
+            source="ja-JP", target="en-GB"
         ).translate(recognized_text)
         print(f"翻訳テキスト: {translated_text}")
 
