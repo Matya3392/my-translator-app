@@ -27,10 +27,8 @@ async def translate_audio(file: UploadFile = File(...), target_lang: str = Form(
             temp_input_path = temp_input.name
 
         try:
-            # Whisper で音声起こし ＋ 英語への直訳（※Groqの仕様上、直接他言語にする場合はプロンプト等が必要ですが、
-            # まずは安定動作する音声認識をベースにするか、そのまま進めます）
+            # 1. Groq Whisper で日本語の音声を文字起こし
             with open(temp_input_path, "rb") as audio_file:
-                # 日本語の文字起こしを取得
                 transcript = client.audio.transcriptions.create(
                     file=(temp_input_path, audio_file.read()),
                     model="whisper-large-v3",
@@ -38,26 +36,29 @@ async def translate_audio(file: UploadFile = File(...), target_lang: str = Form(
                 )
             
             recognized_text = transcript.text.strip()
-            print(f"認識されたテキスト: {recognized_text}")
+            print(f"認識テキスト: {recognized_text}")
 
             if not recognized_text:
                 recognized_text = "音声が聞き取れませんでした"
 
-            # ここで簡易的に、選択された言語へ翻訳する処理（または英語ならそのまま）
-            # ※今回はシンプルに gTTS の言語コードに target_lang を渡して読み上げます
-            translated_text = recognized_text  # 本格的な翻訳APIを挟むことも可能です
+            # 2. 翻訳テキスト（今回は認識されたテキスト、または簡易翻訳）
+            translated_text = recognized_text
 
-            # gTTS で選択された言語の音声を生成
+            # 3. gTTS で音声を生成
             tts = gTTS(text=translated_text, lang=target_lang)
             temp_output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
             tts.save(temp_output_path)
+
+            # ヘッダーに安全な ASCII 文字列として文字データを埋め込む
+            safe_recognized = recognized_text.encode("ascii", "ignore").decode("ascii") or "Voice Recognized"
+            safe_translated = translated_text.encode("ascii", "ignore").decode("ascii") or "Translated"
 
             return FileResponse(
                 temp_output_path,
                 media_type="audio/mpeg",
                 headers={
-                    "X-Recognized-Text": "Success",
-                    "X-Translated-Text": translated_text.encode("ascii", "ignore").decode("ascii") or "Translated"
+                    "X-Recognized-Text": safe_recognized,
+                    "X-Translated-Text": safe_translated
                 }
             )
         finally:
