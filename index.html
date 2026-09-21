@@ -2,34 +2,67 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>音声翻訳テスト</title>
+    <title>音声翻訳アプリ</title>
 </head>
 <body>
     <h1>音声翻訳アプリ</h1>
-    <button id="recordButton">録音・送信テスト</button>
-    <p id="status">ボタンを押してください</p>
+    <button id="recordButton">録音開始</button>
+    <p id="status">ボタンを押して話してください</p>
 
     <script>
-        document.getElementById('recordButton').onclick = async () => {
-            document.getElementById('status').innerText = '処理中...';
-            try {
-                // ダミーの空ファイルを送信してサーバーとの通信テストを行う
-                const blob = new Blob(["dummy audio"], { type: 'audio/wav' });
-                const formData = new FormData();
-                formData.append('file', blob, 'test.wav');
+        let mediaRecorder;
+        let audioChunks = [];
+        const button = document.getElementById('recordButton');
+        const status = document.getElementById('status');
 
-                const response = await fetch('/translate', {
-                    method: 'POST',
-                    body: formData
-                });
+        button.onclick = async () => {
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                // 録音開始
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    audioChunks = [];
 
-                if (response.ok) {
-                    document.getElementById('status').innerText = '通信成功！';
-                } else {
-                    document.getElementById('status').innerText = 'サーバーエラー: ' + response.status;
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        status.innerText = "翻訳中...";
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const formData = new FormData();
+                        formData.append('file', audioBlob, 'recording.webm');
+
+                        try {
+                            const response = await fetch('/translate', {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            if (response.ok) {
+                                status.innerText = "翻訳成功！音声を再生します";
+                                const audioBlobResponse = await response.blob();
+                                const audioUrl = URL.createObjectURL(audioBlobResponse);
+                                const audio = new Audio(audioUrl);
+                                audio.play();
+                            } else {
+                                status.innerText = "サーバーエラーが発生しました";
+                            }
+                        } catch (err) {
+                            status.innerText = "通信エラー: " + err.message;
+                        }
+                        button.innerText = "録音開始";
+                    };
+
+                    mediaRecorder.start();
+                    button.innerText = "録音停止（送信）";
+                    status.innerText = "録音中...";
+                } catch (err) {
+                    status.innerText = "マイクへのアクセスが拒否されました";
                 }
-            } catch (err) {
-                document.getElementById('status').innerText = '通信失敗: ' + err.message;
+            } else {
+                // 録音停止
+                mediaRecorder.stop();
             }
         };
     </script>
