@@ -2,22 +2,49 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>音声翻訳アプリ</title>
+    <title>おーはた翻訳機pro</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f7f6; }
+        .container { background: white; padding: 30px; border-radius: 10px; display: inline-block; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); }
+        select { font-size: 16px; padding: 5px; margin-bottom: 20px; }
+        button { font-size: 18px; padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+        button:hover { background-color: #0056b3; }
+        #status { margin-top: 20px; font-weight: bold; color: #333; }
+        .result-box { margin-top: 20px; font-size: 16px; color: #555; }
+    </style>
 </head>
 <body>
-    <h1>音声翻訳アプリ</h1>
-    <button id="recordButton">録音開始</button>
-    <p id="status">ボタンを押して話してください</p>
+    <div class="container">
+        <h1>おーはた翻訳機pro</h1>
+        
+        <label for="targetLang">翻訳先の言語: </label>
+        <select id="targetLang">
+            <option value="en">英語 (English)</option>
+            <option value="zh-cn">中国語 (Chinese)</option>
+            <option value="ko">韓国語 (Korean)</option>
+            <option value="es">スペイン語 (Spanish)</option>
+            <option value="fr">フランス語 (French)</option>
+        </select>
+        <br>
+
+        <button id="recordButton">録音開始</button>
+        <p id="status">ボタンを押して話してください</p>
+        
+        <div class="result-box">
+            <p><strong>翻訳テキスト:</strong> <span id="translatedText">-</span></p>
+        </div>
+    </div>
 
     <script>
         let mediaRecorder;
         let audioChunks = [];
         const button = document.getElementById('recordButton');
         const status = document.getElementById('status');
+        const translatedTextSpan = document.getElementById('translatedText');
+        const targetLangSelect = document.getElementById('targetLang');
 
         button.onclick = async () => {
             if (!mediaRecorder || mediaRecorder.state === "inactive") {
-                // 録音開始
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -30,8 +57,11 @@
                     mediaRecorder.onstop = async () => {
                         status.innerText = "翻訳中...";
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const targetLang = targetLangSelect.value;
+                        
                         const formData = new FormData();
                         formData.append('file', audioBlob, 'recording.webm');
+                        formData.append('target_lang', targetLang);
 
                         try {
                             const response = await fetch('/translate', {
@@ -40,7 +70,10 @@
                             });
 
                             if (response.ok) {
-                                status.innerText = "翻訳成功！音声を再生します";
+                                const translated = response.headers.get("X-Translated-Text") || "取得成功";
+                                translatedTextSpan.innerText = translated;
+                                status.innerText = "翻訳完了！音声を再生します";
+
                                 const audioBlobResponse = await response.blob();
                                 const audioUrl = URL.createObjectURL(audioBlobResponse);
                                 const audio = new Audio(audioUrl);
@@ -56,12 +89,12 @@
 
                     mediaRecorder.start();
                     button.innerText = "録音停止（送信）";
-                    status.innerText = "録音中...";
+                    status.innerText = "録音中... 話し終わったらボタンを押してください";
+                    translatedTextSpan.innerText = "-";
                 } catch (err) {
-                    status.innerText = "マイクへのアクセスが拒否されました";
+                    status.innerText = "マイクへのアクセスが許可されていません";
                 }
             } else {
-                // 録音停止
                 mediaRecorder.stop();
             }
         };
