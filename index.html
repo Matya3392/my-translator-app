@@ -73,20 +73,14 @@
                             });
 
                             if (response.ok) {
-                                // URLエンコードされた日本語をデコードして復元する
-                                const encodedRec = response.headers.get("X-Recognized-Text") || "";
-                                const encodedTrn = response.headers.get("X-Translated-Text") || "";
+                                const data = await response.json();
 
-                                const recognized = encodedRec ? decodeURIComponent(encodedRec) : "-";
-                                const translated = encodedTrn ? decodeURIComponent(encodedTrn) : "-";
-
-                                recognizedTextSpan.innerText = recognized;
-                                translatedTextSpan.innerText = translated;
+                                recognizedTextSpan.innerText = data.recognized || "-";
+                                translatedTextSpan.innerText = data.translated || "-";
                                 status.innerText = "完了！音声を再生します";
 
-                                const audioBlobResponse = await response.blob();
-                                const audioUrl = URL.createObjectURL(audioBlobResponse);
-                                const audio = new Audio(audioUrl);
+                                // Base64形式の音声データを再生
+                                const audio = new Audio("data:audio/mp3;base64," + data.audio);
                                 audio.play();
                             } else {
                                 status.innerText = "サーバーエラーが発生しました";
