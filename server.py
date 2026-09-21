@@ -57,7 +57,7 @@ async def translate_audio(
                 recognized_text = "音声が聞き取れませんでした"
                 translated_text = recognized_text
             else:
-                # 2. Groq LLM (llama-3.3-70b-versatile) で翻訳
+                # 2. Groq LLM で翻訳 (モデル名を llama-3.1-8b-instant に修正)
                 target_lang_name = LANG_NAMES.get(target_lang, "English")
 
                 chat_completion = client.chat.completions.create(
@@ -68,7 +68,7 @@ async def translate_audio(
                         },
                         {"role": "user", "content": recognized_text},
                     ],
-                    model="llama-3.3-70b-versatile",
+                    model="llama-3.1-8b-instant",
                 )
 
                 translated_text = (
