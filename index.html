@@ -6,8 +6,7 @@
     <style>
         body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f7f6; }
         .container { background: white; padding: 30px; border-radius: 10px; display: inline-block; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); width: 400px; }
-        select { font-size: 16px; padding: 5px; margin-bottom: 20px; }
-        button { font-size: 18px; padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+        button { font-size: 18px; padding: 12px 24px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; font-weight: bold; }
         button:hover { background-color: #0056b3; }
         #status { margin-top: 20px; font-weight: bold; color: #333; }
         .result-box { margin-top: 20px; text-align: left; background: #f9f9f9; padding: 15px; border-radius: 5px; font-size: 15px; color: #333; word-break: break-all; }
@@ -17,15 +16,7 @@
 <body>
     <div class="container">
         <h1>おーはた翻訳機pro</h1>
-        
-        <label for="targetLang">翻訳先の言語: </label>
-        <select id="targetLang">
-            <option value="en">英語 (English)</option>
-            <option value="zh-cn">中国語 (Chinese)</option>
-            <option value="ko">韓国語 (Korean)</option>
-            <option value="es">スペイン語 (Spanish)</option>
-            <option value="fr">フランス語 (French)</option>
-        </select>
+        <p style="color: #666; font-size: 14px;">(日本語 ➔ 英語 翻訳)</p>
         <br>
 
         <button id="recordButton">録音開始</button>
@@ -33,7 +24,7 @@
         
         <div class="result-box">
             <p><strong>認識した言葉:</strong><br><span id="recognizedText">-</span></p>
-            <p><strong>翻訳テキスト:</strong><br><span id="translatedText">-</span></p>
+            <p><strong>翻訳テキスト (English):</strong><br><span id="translatedText">-</span></p>
         </div>
     </div>
 
@@ -44,7 +35,16 @@
         const status = document.getElementById('status');
         const recognizedTextSpan = document.getElementById('recognizedText');
         const translatedTextSpan = document.getElementById('translatedText');
-        const targetLangSelect = document.getElementById('targetLang');
+
+        // ブラウザ標準の読み上げ機能
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // 前の音声を停止
+                const uttr = new SpeechSynthesisUtterance(text);
+                uttr.lang = 'en-US'; // 英語で再生
+                window.speechSynthesis.speak(uttr);
+            }
+        }
 
         button.onclick = async () => {
             if (!mediaRecorder || mediaRecorder.state === "inactive") {
@@ -58,13 +58,11 @@
                     };
 
                     mediaRecorder.onstop = async () => {
-                        status.innerText = "文字起こし・翻訳中...";
+                        status.innerText = "高速翻訳中...";
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        const targetLang = targetLangSelect.value;
                         
                         const formData = new FormData();
                         formData.append('file', audioBlob, 'recording.webm');
-                        formData.append('target_lang', targetLang);
 
                         try {
                             const response = await fetch('/translate', {
@@ -77,11 +75,12 @@
 
                                 recognizedTextSpan.innerText = data.recognized || "-";
                                 translatedTextSpan.innerText = data.translated || "-";
-                                status.innerText = "完了！音声を再生します";
+                                status.innerText = "翻訳完了！";
 
-                                // Base64形式の音声データを再生
-                                const audio = new Audio("data:audio/mp3;base64," + data.audio);
-                                audio.play();
+                                // ブラウザ機能で英語をスピーチ
+                                if (data.translated && data.translated !== "-") {
+                                    speakText(data.translated);
+                                }
                             } else {
                                 status.innerText = "サーバーエラーが発生しました";
                             }
