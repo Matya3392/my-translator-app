@@ -2,7 +2,8 @@ import os
 import tempfile
 import traceback
 from fastapi import FastAPI, File, Form, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from groq import Groq
 from gtts import gTTS
 
@@ -41,7 +42,7 @@ async def translate_audio(file: UploadFile = File(...), target_lang: str = Form(
             if not recognized_text:
                 recognized_text = "音声が聞き取れませんでした"
 
-            # 2. 翻訳テキスト（今回は認識されたテキスト、または簡易翻訳）
+            # 2. 翻訳テキスト（今の段階では認識された日本語をそのまま、または必要に応じて）
             translated_text = recognized_text
 
             # 3. gTTS で音声を生成
@@ -49,18 +50,33 @@ async def translate_audio(file: UploadFile = File(...), target_lang: str = Form(
             temp_output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
             tts.save(temp_output_path)
 
-            # ヘッダーに安全な ASCII 文字列として文字データを埋め込む
-            safe_recognized = recognized_text.encode("ascii", "ignore").decode("ascii") or "Voice Recognized"
-            safe_translated = translated_text.encode("ascii", "ignore").decode("ascii") or "Translated"
+            # 音声ファイルをバイナリとして読み込む
+            with open(temp_output_path, "rb") as f:
+                audio_bytes = f.read()
+
+            # 一時ファイルの削除
+            os.remove(temp_output_path)
+
+            # JSON としてテキストと音声（Base64等）を返すか、あるいは別ルートにするのが一番確実ですが、
+            # 今回はシンプルに、テキストはカスタムヘッダーに URLEncode して日本語が消えないように送ります！
+            import urllib.parse
+            encoded_recognized = urllib.parse.quote(recognized_text)
+            encoded_translated = urllib.parse.quote(translated_text)
+
+            from fastapi.responses import FileResponse
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_out_res:
+                temp_out_res.write(audio_bytes)
+                temp_out_path = temp_out_res.name
 
             return FileResponse(
-                temp_output_path,
+                temp_out_path,
                 media_type="audio/mpeg",
                 headers={
-                    "X-Recognized-Text": safe_recognized,
-                    "X-Translated-Text": safe_translated
+                    "X-Recognized-Text": encoded_recognized,
+                    "X-Translated-Text": encoded_translated
                 }
             )
+
         finally:
             if os.path.exists(temp_input_path):
                 os.remove(temp_input_path)

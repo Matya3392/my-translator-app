@@ -10,7 +10,7 @@
         button { font-size: 18px; padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
         button:hover { background-color: #0056b3; }
         #status { margin-top: 20px; font-weight: bold; color: #333; }
-        .result-box { margin-top: 20px; text-align: left; background: #f9f9f9; padding: 15px; border-radius: 5px; font-size: 15px; color: #333; }
+        .result-box { margin-top: 20px; text-align: left; background: #f9f9f9; padding: 15px; border-radius: 5px; font-size: 15px; color: #333; word-break: break-all; }
         .result-box p { margin: 10px 0; }
     </style>
 </head>
@@ -73,9 +73,12 @@
                             });
 
                             if (response.ok) {
-                                // サーバーのヘッダーから文字データを取得
-                                const recognized = response.headers.get("X-Recognized-Text") || "-";
-                                const translated = response.headers.get("X-Translated-Text") || "-";
+                                // URLエンコードされた日本語をデコードして復元する
+                                const encodedRec = response.headers.get("X-Recognized-Text") || "";
+                                const encodedTrn = response.headers.get("X-Translated-Text") || "";
+
+                                const recognized = encodedRec ? decodeURIComponent(encodedRec) : "-";
+                                const translated = encodedTrn ? decodeURIComponent(encodedTrn) : "-";
 
                                 recognizedTextSpan.innerText = recognized;
                                 translatedTextSpan.innerText = translated;
